@@ -1,44 +1,16 @@
 class ProductsController < ApplicationController
     skip_before_action :verify_authenticity_token
     def create
-        data=Product.create(user_params)
-        
+        data=Product.create(user_params)       
         render json: data
     end
-    def adding
-        Product.add_product
-        render json: { message: "Sync started" }
-    end
-
-    # def updating
-    #     @product = Product.find(params[:id]) 
-    #     if @product.update_with_elasticsearch(user_params)
-    #         render json: @product
-    #     else
-    #         render json: { errors: "Update failed" }, status: :unprocessable_entity
-    #     end
-    # end
-
-    # def deleting
-    #     @product = Product.find(params[:id])
-    #     if @product.delete_with_elasticsearch
-    #         render json: { message: "Deleted" }
-    #     else
-    #         render json: { error: "Delete failed" }, status: :error
-    #     end
-    # end
-
+    
     def index
         render json: Product.all
-    end
-    def show
-        product = Product.find(params[:id])
-        render json: product
     end
 
     def update
         product = Product.find(params[:id])
-
         if product.update(user_params)
             WriteProductToFileJob.perform_later(user_params)
             render json: product
@@ -50,127 +22,149 @@ class ProductsController < ApplicationController
 
     def destroy
         product = Product.find(params[:id])
-
         if product.destroy
             render json: { message: "Deleted successfully" }
         else
             render json: { error: "Deletion failed" }
         end
     end
-
-    
+       
     def search
         page = (params[:page] || 1).to_i
         per_page = (params[:per_page] || 5).to_i
-        allowed_sort_fields = ["price", "productname", "best_seller"]
-        sort_by = params[:sort_by].presence_in(allowed_sort_fields) 
-        sort_order = params[:sort_order].presence_in(["asc", "desc"]) || "asc"
-        es_sort_field = sort_by == "productname" ? "productname.keyword" : sort_by
-        sort_clause = [{ es_sort_field=> { order: sort_order } }]
-
-        must_queries = []
-        filters = []
-        if params[:q].present?
-            must_queries << {
-            multi_match: {
-                query: params[:q],
-                fields: ["productname", "category", "subcategory"]
-            }
-            }
-        end
-        if params[:category].present?
-            filters << { term: { "category.keyword": params[:category] } }
-            category_for_subcategory = params[:category]
-        else
-            category_for_subcategory = nil
-        end
-
-        if params[:subcategory].present?
-            filters << { term: { "subcategory.keyword": params[:subcategory] } }
-            if params[:category].blank?
-            cat_resp = ES_CLIENT.search(
-                index: 'products',
-                body: {
+        allowed_sort_fields = ["price", "productname"]
+        sort_by = params[:sort_by].presence_in(allowed_sort_fields)
+        sort_order = params[:sort_order].presence_in(["asc", "desc"]) || "asc"       
+        category_scope = params[:category]
+        if category_scope.blank? && params[:subcategory].present?
+            cat_resp = ES_CLIENT.search(index: 'products', body: {
                 size: 1,
-                query: {
-                    match: { "subcategory.keyword": params[:subcategory] }
-                }
-                }
-            )
-            if cat_resp["hits"]["hits"].any?
-                category_for_subcategory = cat_resp["hits"]["hits"][0]["_source"]["category"]
-                # Add category filter
-                filters << { term: { "category.keyword": category_for_subcategory } }
-            end
-            end
+                query: { match: { "subcategory": params[:subcategory] } }
+            })
+            category_scope = cat_resp.dig("hits", "hits", 0, "_source", "category")
         end
-
+        must_conditions = []
+        must_conditions << { match: { "category": category_scope } } if category_scope.present?
+        if params[:q].present?
+            must_conditions << { multi_match: { query: params[:q], fields: ["productname", "subcategory"] } }
+        end
+        post_filters = []
+        if params[:subcategory].present?
+            post_filters << { match: { "subcategory": params[:subcategory] } }
+        end
         if params[:min_price].present? || params[:max_price].present?
-            filters << {
-            range: {
-                price: {
-                gte: params[:min_price] || 0,
-                lte: params[:max_price] || 999_999
+            post_filters << {
+                range: {
+                    price: {
+                        gte: params[:min_price].present? ? params[:min_price].to_f : 0,
+                        lte: params[:max_price].present? ? params[:max_price].to_f : 999_999
+                    }
                 }
             }
-            }
         end
-
-        query_body = if must_queries.any? || filters.any?
-            { bool: { must: must_queries, filter: filters } }
-        else
-            { match_all: {} }
-        end
-
         body = {
             from: (page - 1) * per_page,
             size: per_page,
-            query: query_body,
-            sort: sort_clause
+            query: must_conditions.any? ? { bool: { must: must_conditions } } : { match_all: {} },
+            aggs: {
+                subcategories: {
+                    terms: { field: "subcategory" } 
+                }
+            }
         }
 
-        body[:aggs] = if category_for_subcategory
-            {
-            subcategories: {
-                global: {},
-                aggs: {
-                by_category: {
-                    filter: { term: { "category.keyword": category_for_subcategory } },
-                    aggs: { names: { terms: { field: "subcategory.keyword", size: 100 } } }
-                }
-                }
-            }
-            }
-        else
-            { subcategories: { terms: { field: "subcategory.keyword", size: 100 } } }
+        if post_filters.any?
+            body[:post_filter] = { bool: { filter: post_filters } }
         end
-
         response = ES_CLIENT.search(index: 'products', body: body)
-
-        products = response["hits"]["hits"].map do |hit|
-            {
-                id: hit["_id"],
-                name: hit["_source"]["productname"],
-                price: hit["_source"]["price"],
-                category: hit["_source"]["category"],
-                subcategory: hit["_source"]["subcategory"]
-            }
-        end
-
-        subcategories = if category_for_subcategory
-            response["aggregations"]["subcategories"]["by_category"]["names"]["buckets"].map { |b| b["key"] }
-        else
-            response["aggregations"]["subcategories"]["buckets"].map { |b| b["key"] }
-        end
-
-        total = response["hits"]["total"]["value"]
-
+        
         render json: {
-            products: products,
-            filters: { subcategories: subcategories },
-            total: total
+            products: response["hits"]["hits"].map { |h| h["_source"]},
+            filters: { 
+                subcategories: response.dig("aggregations", "subcategories", "buckets")&.map { |b| b["key"] } || []
+            },
+            total: response.dig("hits", "total", "value") || 0
         }
     end
+ 
+  
+    def dynamic_category
+        full_input = params[:filter_slug]
+        return render json: { error: "Invalid input" }, status: :bad_request if full_input.blank?
+        parts = full_input.split('&')
+        rule_slug = parts.shift
+        rule = FilterRule.find_by(filter_name: rule_slug)
+        return render json: { error: "Rule '#{rule_slug}' not found" }, status: :not_found unless rule
+        query_filters = []
+        post_filters = []
+        query_string = params[:q]
+        page = (params[:page] || 1).to_i
+        per_page = 10
+        rule.filter_condition.each do |field, value|
+            if ["category", "subcategory"].include?(field.to_s)
+                operator = value.is_a?(Array) ? :terms : :term
+                query_filters << { operator => { field => value } }
+            else
+                post_filters << (
+                    value.is_a?(Hash) ?
+                    { range: { field => value } } :
+                    { term: { field => value } }
+                )
+            end
+        end
+        parts.each do |part|
+            key, value = part.split(':')
+            next if key.blank? || value.blank?
+            case key
+            when "min_price"
+                post_filters << { range: { price: { gte: value.to_f } } }
+
+            when "max_price"
+                post_filters << { range: { price: { lte: value.to_f } } }
+            end
+        end
+        body = {
+            from: (page - 1) * per_page,
+            size: per_page,
+            query: {
+            bool: {
+                must: query_string.present? ?
+                {
+                    multi_match: {
+                    query: query_string,
+                    fields: ["productname", "subcategory"]
+                    }
+                } :
+                { match_all: {} },
+
+                filter: query_filters
+            }
+            },
+            post_filter: {
+                bool: {
+                    filter: post_filters
+                }
+            },
+            aggs: {
+                discovered_category: {
+                    terms: { field: "category"}
+                }
+            }
+        }
+        response = ES_CLIENT.search(index: 'products', body: body)
+        hits = response["hits"]["hits"]
+        category_buckets = response["aggregations"]["discovered_category"]["buckets"]
+        found_category = category_buckets.map { |b| b["key"] }.join(", ")
+        render json: {
+            metadata: {
+            total_count: response["hits"]["total"]["value"],
+            current_page: page,
+            category: found_category.presence || "Unknown"
+            },
+            products: hits.map { |h| h["_source"] }
+        }
+    end
+
     private
     def user_params
         params.permit(:productname, :price, :category, :subcategory)

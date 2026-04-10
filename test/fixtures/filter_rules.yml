@@ -1,0 +1,9 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  filter_name: MyString
+  filter_condition: 
+
+two:
+  filter_name: MyString
+  filter_condition: 
