@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_09_102217) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_13_110703) do
   create_table "conversion_practices", force: :cascade do |t|
     t.string "category"
     t.datetime "created_at", null: false
@@ -21,7 +21,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_09_102217) do
 
   create_table "filter_rules", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.json "filter_condition"
+    t.string "filter_condition"
     t.string "filter_name"
     t.datetime "updated_at", null: false
   end

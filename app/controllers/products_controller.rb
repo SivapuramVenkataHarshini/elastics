@@ -4,7 +4,7 @@ class ProductsController < ApplicationController
         data=Product.create(user_params)       
         render json: data
     end
-    
+
     def index
         render json: Product.all
     end
@@ -18,6 +18,13 @@ class ProductsController < ApplicationController
             render json: product.errors, status: :unprocessable_entity
         end
 
+    end
+
+    def get_single_product
+        response = ES_CLIENT.get(index: 'products',id: params[:id])
+        render json:{
+            product: response["_source"]
+        }
     end
 
     def destroy
@@ -100,7 +107,8 @@ class ProductsController < ApplicationController
         query_string = params[:q]
         page = (params[:page] || 1).to_i
         per_page = 10
-        rule.filter_condition.each do |field, value|
+        condition = JSON.parse(rule.filter_condition)
+        condition.each do |field, value|
             if ["category", "subcategory"].include?(field.to_s)
                 operator = value.is_a?(Array) ? :terms : :term
                 query_filters << { operator => { field => value } }
@@ -117,10 +125,10 @@ class ProductsController < ApplicationController
             next if key.blank? || value.blank?
             case key
             when "min_price"
-                post_filters << { range: { price: { gte: value.to_f } } }
+                post_filters << { range: { price: { gte: value} } }
 
             when "max_price"
-                post_filters << { range: { price: { lte: value.to_f } } }
+                post_filters << { range: { price: { lte: value } } }
             end
         end
         body = {
