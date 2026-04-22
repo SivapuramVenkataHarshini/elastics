@@ -102,75 +102,81 @@ class ProductsController < ApplicationController
         rule_slug = parts.shift
         rule = FilterRule.find_by(filter_name: rule_slug)
         return render json: { error: "Rule '#{rule_slug}' not found" }, status: :not_found unless rule
-        query_filters = []
-        post_filters = []
-        query_string = params[:q]
-        page = (params[:page] || 1).to_i
-        per_page = 10
-        condition = JSON.parse(rule.filter_condition)
-        condition.each do |field, value|
-            if ["category", "subcategory"].include?(field.to_s)
-                operator = value.is_a?(Array) ? :terms : :term
-                query_filters << { operator => { field => value } }
-            else
-                post_filters << (
-                    value.is_a?(Hash) ?
-                    { range: { field => value } } :
-                    { term: { field => value } }
-                )
-            end
-        end
+        params_hash = {}
         parts.each do |part|
             key, value = part.split(':')
             next if key.blank? || value.blank?
-            case key
-            when "min_price"
-                post_filters << { range: { price: { gte: value} } }
-
-            when "max_price"
-                post_filters << { range: { price: { lte: value } } }
-            end
+            params_hash[key] = value
         end
-        body = {
-            from: (page - 1) * per_page,
-            size: per_page,
-            query: {
-            bool: {
-                must: query_string.present? ?
-                {
-                    multi_match: {
-                    query: query_string,
-                    fields: ["productname", "subcategory"]
-                    }
-                } :
-                { match_all: {} },
-
-                filter: query_filters
-            }
-            },
-            post_filter: {
+        cache_key = [
+                        rule_slug,
+                        params_hash.sort.to_h
+                    ]
+        result_products = Rails.cache.fetch("dynamicCategory:#{cache_key}", expires_in: 10.minutes) do 
+            Rails.logger.info("CACHE MISS,#{cache_key}")
+            query_filters = []
+            post_filters = []
+            query_string = params_hash["q"]
+            page = (params_hash["page"] || 1).to_i
+            per_page = (params_hash["per_page"] || 10).to_i
+            condition = JSON.parse(rule.filter_condition)
+            condition.each do |field, value|
+                if ["category", "subcategory"].include?(field.to_s)
+                    operator = value.is_a?(Array) ? :terms : :term
+                    query_filters << { operator => { field => value } }
+                else
+                    post_filters << (
+                        value.is_a?(Hash) ?
+                        { range: { field => value } } :
+                        { term: { field => value } }
+                    )
+                end
+            end
+            post_filters << { range: { price: { gte: params_hash["min_price"].to_i} } } if params_hash["min_price"].present?
+            post_filters << { range: { price: { lte: params_hash["max_price"].to_i} } } if params_hash["max_price"].present?
+            body = {
+                from: (page - 1) * per_page,
+                size: per_page,
+                query: {
                 bool: {
-                    filter: post_filters
+                    must: query_string.present? ?
+                    {
+                        multi_match: {
+                        query: query_string,
+                        fields: ["productname", "subcategory"]
+                        }
+                    } :
+                    { match_all: {} },
+
+                    filter: query_filters
                 }
-            },
-            aggs: {
-                discovered_category: {
-                    terms: { field: "category"}
+                },
+                post_filter: {
+                    bool: {
+                        filter: post_filters
+                    }
+                },
+                aggs: {
+                    discovered_category: {
+                        terms: { field: "category"}
+                    }
                 }
             }
-        }
-        response = ES_CLIENT.search(index: 'products', body: body)
-        hits = response["hits"]["hits"]
-        category_buckets = response["aggregations"]["discovered_category"]["buckets"]
-        found_category = category_buckets.map { |b| b["key"] }.join(", ")
-        render json: {
-            metadata: {
-            total_count: response["hits"]["total"]["value"],
-            current_page: page,
-            category: found_category.presence || "Unknown"
-            },
-            products: hits.map { |h| h["_source"] }
-        }
+            response = ES_CLIENT.search(index: 'products', body: body)
+            hits = response["hits"]["hits"]
+            hits=hits.map { |h| h["_source"] }
+            category_buckets = response["aggregations"]["discovered_category"]["buckets"]
+            found_category = category_buckets.map { |b| b["key"] }.join(", ")
+            { 
+                metadata:{
+                total_count: response["hits"]["total"]["value"],
+                current_page: page,
+                category: found_category.presence || "Unknown"
+                },
+                products: hits
+            }
+        end
+        render json: result_products
     end
 
     private

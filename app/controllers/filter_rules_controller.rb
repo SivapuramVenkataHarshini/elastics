@@ -30,7 +30,13 @@ class FilterRulesController < ApplicationController
                 }
             }
         )
-        render json: response
+        rules = response["hits"]["hits"].map do |rule|
+                {
+                    filter_name: rule["_source"]["filter_name"], 
+                    filter_condition: rule["_source"]["query"]["bool"]["must"]
+                }
+                end
+        render json: rules
     end
     def index
         @rules=FilterRule.all
@@ -76,7 +82,8 @@ class FilterRulesController < ApplicationController
         rules = response["hits"]["hits"].map do |rule|
                 {
                     id: rule["_id"],
-                    rule: rule["_source"]["query"]["bool"]["must"]
+                    filter_name: rule["_source"]["filter_name"], 
+                    filter_condition: rule["_source"]["query"]["bool"]["must"]
                 }
                     
         end

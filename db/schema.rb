@@ -10,12 +10,19 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_13_110703) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_20_125749) do
   create_table "conversion_practices", force: :cascade do |t|
     t.string "category"
     t.datetime "created_at", null: false
     t.integer "price"
     t.string "product_name"
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "dynamic_fields", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "field_name"
+    t.string "field_type"
     t.datetime "updated_at", null: false
   end
 

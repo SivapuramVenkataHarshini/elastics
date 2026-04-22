@@ -7,7 +7,7 @@ class FilterRule < ApplicationRecord
     # serialize :filter_condition2, coder: JSON , type: Hash
 
     after_commit :add_to_percolate ,on: [:create]
-    after_destroy :delete_from_percolate ,on: [:destroy]
+    after_commit :delete_from_percolate ,on: [:destroy]
 
     def add_to_percolate
         condition = FilterRule.parse_condition(self.filter_condition)

@@ -14,8 +14,11 @@ Rails.application.routes.draw do
   get 'category/:filter_slug', to: 'products#dynamic_category'
   
   #percolate query 
-  post 'filter_rules/create_index', to: 'filter_rules#create_index'
-  post 'filter_rules/import', to: 'filter_rules#import'
-  get 'filter_rules/fetch_all', to: 'filter_rules#fetch_all_percolator_queries'
-  get 'filter_rules/:id', to: 'filter_rules#get_suitable_query'
+  post 'percolate_queries/create_index', to: 'filter_rules#create_index'
+  post 'percolate_queries/import', to: 'filter_rules#import'
+  get 'percolate_queries/fetch_all', to: 'filter_rules#fetch_all_percolator_queries'
+  get 'suitable_query/:id', to: 'filter_rules#get_suitable_query'
+
+  #dynamic fields 
+  post 'dynamic_field/new_field', to: 'dynamic_fields#create'
 end
