@@ -18,7 +18,7 @@ class DynamicField < ApplicationRecord
     end
     def update_mapping
         ES_CLIENT.indices.put_mapping(
-            index: "products",
+            index: "products1",
             body:{
                 properties: {
                     field_name => {

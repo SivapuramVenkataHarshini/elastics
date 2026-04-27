@@ -21,4 +21,9 @@ Rails.application.routes.draw do
 
   #dynamic fields 
   post 'dynamic_field/new_field', to: 'dynamic_fields#create'
+
+  #products1
+  post "products1", to: "products1#create"
+  post "products1/create_index", to: "products1#create_index"
+  post "products1/import", to: "products1#import"
 end
