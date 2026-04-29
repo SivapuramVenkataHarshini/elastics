@@ -10,7 +10,41 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_22_074713) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_28_061123) do
+  create_table "addresses", force: :cascade do |t|
+    t.string "area"
+    t.string "city"
+    t.string "country"
+    t.datetime "created_at", null: false
+    t.string "door_number"
+    t.string "pincode"
+    t.string "state"
+    t.string "street_name"
+    t.datetime "updated_at", null: false
+    t.integer "user_id", null: false
+    t.index ["user_id"], name: "index_addresses_on_user_id"
+  end
+
+  create_table "cart_items", force: :cascade do |t|
+    t.integer "cart_id", null: false
+    t.datetime "created_at", null: false
+    t.integer "price_at_time"
+    t.integer "product1_id", null: false
+    t.integer "quantity", default: 1
+    t.datetime "updated_at", null: false
+    t.index ["cart_id"], name: "index_cart_items_on_cart_id"
+    t.index ["product1_id"], name: "index_cart_items_on_product1_id"
+  end
+
+  create_table "carts", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "guest_id"
+    t.integer "status"
+    t.datetime "updated_at", null: false
+    t.integer "user_id"
+    t.index ["user_id"], name: "index_carts_on_user_id"
+  end
+
   create_table "conversion_practices", force: :cascade do |t|
     t.string "category"
     t.datetime "created_at", null: false
@@ -47,4 +81,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_22_074713) do
     t.string "subcategory"
     t.datetime "updated_at", null: false
   end
+
+  create_table "users", force: :cascade do |t|
+    t.string "country_code"
+    t.datetime "created_at", null: false
+    t.string "email"
+    t.boolean "is_verified", default: false, null: false
+    t.string "name"
+    t.string "password_digest"
+    t.string "phone_number"
+    t.datetime "updated_at", null: false
+  end
+
+  add_foreign_key "addresses", "users"
+  add_foreign_key "cart_items", "carts"
+  add_foreign_key "cart_items", "product1s"
+  add_foreign_key "carts", "users"
 end

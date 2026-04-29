@@ -26,4 +26,15 @@ Rails.application.routes.draw do
   post "products1", to: "products1#create"
   post "products1/create_index", to: "products1#create_index"
   post "products1/import", to: "products1#import"
+
+  #user
+  post "user", to: "users#create"
+  post "user/verify", to: "users#verify"
+  post "user/login", to: "users#login"
+
+  #carts
+  get "/tests", to: "tests#index"
+  post "/carts/add_to_cart/:id", to: "carts#add_to_cart"
+  get "/carts", to: "carts#index"
+  get "/carts/show_all", to: "carts#show_cart"
 end

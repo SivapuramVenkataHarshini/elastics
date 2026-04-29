@@ -1,4 +1,5 @@
 class Product1 < ApplicationRecord
+  has_many :cart_items
   validate :check_presence
   include Elasticsearch::Model
   include Elasticsearch::Model::Callbacks
