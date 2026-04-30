@@ -31,6 +31,7 @@ Rails.application.routes.draw do
   post "user", to: "users#create"
   post "user/verify", to: "users#verify"
   post "user/login", to: "users#login"
+  post "user/logout", to: "users#logout"
 
   #carts
   get "/tests", to: "tests#index"

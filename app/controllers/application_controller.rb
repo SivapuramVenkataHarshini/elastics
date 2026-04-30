@@ -6,10 +6,11 @@ class ApplicationController < ActionController::Base
   stale_when_importmap_changes
 
   before_action :set_guest_id
-
+  def current_user
+    @current_user ||= User.find_by(id: session[:user_id])
+  end
   private
   def set_guest_id
     cookies.signed[:guest_id] ||= SecureRandom.uuid
-
   end
 end

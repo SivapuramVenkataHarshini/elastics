@@ -2,10 +2,14 @@ class CartsController < ApplicationController
   skip_before_action :verify_authenticity_token
 
   def current_cart
-    Cart.find_or_create_by(
+    if current_user
+      Cart.find_or_create_by(user_id: current_user.id, status: 0)
+    else
+      Cart.find_or_create_by(
       guest_id: cookies.signed[:guest_id],
       status: 0
     )
+    end
   end
 
   def add_to_cart
@@ -25,7 +29,7 @@ class CartsController < ApplicationController
     end
     render json: { message: "ok", quantity: cart_item.quantity }
   end
-
+  
   def show_cart
     cart = current_cart
     value = 0
